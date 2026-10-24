@@ -114,8 +114,26 @@ class StableDiffusion(nn.Module):
         Returns:
             loss: Scalar SDS loss
         """
-        # TODO: Implement SDS loss
-        raise NotImplementedError("TODO: Implement SDS loss")
+        t = torch.randint(self.min_step, self.max_step, latents.shape[0], device=latents.device)
+        noise = torch.randn_like(latents)
+        
+        # For braodcasting
+        alpha_bar_t = self.alphas[t].view(-1, 1, 1, 1)
+
+        xt = torch.sqrt(alpha_bar_t) * latents + torch.sqrt(1 - alpha_bar_t) * noise
+        
+        # Ignore the Unet Jacobian
+        with torch.no_grad():
+            noise_pred = self.get_noise_preds(xt, t, text_embeddings, guidance_scale)
+        
+        # SDS timestep weighting
+        w = 1 - alpha_bar_t
+
+        # View the gradient as a constant
+        grad = (w * (noise_pred - noise)).detach()
+
+        loss = (grad * latents).sum()
+        return loss 
 
     def get_vsd_loss(self, latents, text_embeddings, guidance_scale=7.5, lora_loss_weight=1.0):
         """
