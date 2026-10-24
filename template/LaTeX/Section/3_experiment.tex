@@ -15,13 +15,36 @@
 
 \input{Table/1_clip}
 
-\TODO{Which method has the best average CLIP score (\cref{tab:clip})? Are there prompts where the ranking changes, and why might that be? Does the score agree with your visual impression?}
+\Cref{tab:clip} reports CLIP scores for the ten evaluation prompts.
+SDI has the highest average CLIP score (0.3086), followed by SDS (0.3042) and VSD (0.3011).
+SDI leads on four prompts, while SDS and VSD each lead on three.
+
+The score ranking only partly agrees with the visual comparison in \cref{fig:qualitative}.
+For the burger, SDS scores 0.3047 despite producing a blurrier image than SDI, which scores 0.2990.
+The object remains recognizable in SDS, illustrating that stronger image--text similarity does not
+necessarily imply sharper details.
 
 %-------------------------------------------------------------------------
 \subsection{Qualitative Results}
 \label{sec:qualitative}
 
-\TODO{Compare the methods visually and point to concrete examples in \cref{fig:qualitative}. What are the typical strengths and failure cases of each method?}
+\Cref{fig:qualitative} shows clear differences in texture and structure among the three methods.
+SDS produces recognizable objects and simple compositions, but edges and surfaces are heavily
+smoothed.
+For example, the burger has a clear silhouette but little texture, and the cabin and castle lose
+fine architectural details.
+
+VSD produces sharper local details and more varied colors, but many images contain dense, irregular
+textures.
+The burger has visible sesame seeds and layered ingredients, while the villa includes vegetation and
+pool reflections.
+However, mottled patterns cover the burger background, and the villa's walls and roof appear
+fragmented.
+These artifacts show that additional detail does not always yield coherent surfaces.
+
+SDI generally produces cleaner surfaces and more distinct object boundaries.
+The cabin and church have clearer architectural structure, and the burger shows individual
+ingredients against a smoother background.
 
 %-------------------------------------------------------------------------
 \subsection{Ablation Study}
@@ -29,22 +52,65 @@
 
 \input{Table/2_ablation}
 
-\TODO{Briefly describe the setup: which prompts and values were tested; all other hyperparameters follow \cref{tab:hparams}. \Cref{tab:ablation} lists the CLIP scores of all three ablations.}
+We varied one hyperparameter at a time while keeping the remaining settings in
+\cref{tab:hparams} fixed.
+Each entry in \cref{tab:ablation} averages CLIP scores over the Burger, Cat, and Villa prompts.
 
 \subsubsection{SDS: \texttt{guidance\_scale}}
 \label{sec:abl_sds_gs}
 
-\TODO{How do the results change as the guidance scale increases (\cref{fig:abl_sds_gs}, \cref{tab:ablation}(a)), and why? Which value works best, and how does it compare with the guidance scale typically used for ordinary sampling?}
+\Cref{tab:ablation}(a) shows that the score rises from 0.2426 at guidance 7.5 to 0.2950 at 15,
+with the highest observed score of 0.2991 at 25.
+Larger scales reduce the score to 0.2879 at 50 and 0.2815 at 100.
+In \cref{fig:abl_sds_gs}, guidance 7.5 produces blurred subjects, and the villa is barely visible
+around the pool.
+At 15, the subjects become more distinct, while 50 and 100 introduce increasingly dense background
+textures, especially around the burger and cat.
+
+Increasing CFG amplifies the difference between positive- and negative-condition noise predictions,
+giving the noisy SDS updates a stronger direction toward the text prompt.
+Excessively strong guidance can also exaggerate textures, consistent with the cluttered backgrounds
+at 50 and 100.
+Guidance 25 gives the best observed score among the tested values, compared with 7.5 commonly used
+for ordinary sampling.
+These results suggest that SDS benefits from stronger text guidance, but increasing it beyond a
+moderate value does not necessarily improve alignment or visual quality.
 
 \subsubsection{SDI: \texttt{inversion\_n\_steps}}
 \label{sec:abl_sdi_steps}
 
-\TODO{How do the results and the runtime change with the number of inversion steps (\cref{fig:abl_sdi_steps}, \cref{tab:ablation}(b)), and why? Is there a trade-off?}
+One inversion step produces a low score of 0.1809 and largely unrecognizable images in
+\cref{fig:abl_sdi_steps}, consistent with an overly coarse inversion.
+Three steps recover recognizable subjects and raise the score to 0.2942.
+The scores then vary non-monotonically: 0.2874 at 5 steps, 0.3006 at 10, and 0.2956 at 25.
+More steps therefore do not guarantee better text alignment.
+Smaller inversion steps provide a finer approximation to the predicted trajectory, but final image
+quality also depends on target reconstruction and latent optimization.
+
+Each additional inversion step requires another U-Net evaluation whenever the target is refreshed,
+so runtime grows approximately linearly with the step count.
+The trade-off is clear: 1 step is fast but fails to form recognizable subjects, whereas 25 steps
+costs about 6.7 times as much as 3 steps for a score increase of only about 0.0013.
+Three steps is therefore a lower-cost option with a similar CLIP score, while 10 steps gives the
+highest observed score among the tested settings.
 
 \subsubsection{SDI: \texttt{sdi\_update\_interval}}
 \label{sec:abl_sdi_interval}
 
-\TODO{How do the results change with the update interval (\cref{fig:abl_sdi_interval}, \cref{tab:ablation}(c)), and why? What happens at the two extremes?}
+The highest observed score is 0.3006 at interval 25, while interval 1000 drops to 0.1934
+(\cref{tab:ablation}(c)).
+
+At the smallest tested interval of 25, the target is refreshed 40 times during 1000 iterations,
+allowing it to follow the changing latent and incorporate progressively lower noise levels.
+The subjects remain recognizable in \cref{fig:abl_sdi_interval}, and this setting gives the highest
+observed score.
+At the largest interval of 1000, the target is constructed only once, at the initial timestep 980.
+All subsequent iterations fit that fixed target without receiving a new estimate at a lower noise
+level, consistent with the severe artifacts and low score.
+Larger intervals therefore hold potentially outdated targets for more iterations and skip more
+scheduled timesteps.
+The results favor repeated target updates over fitting a single initial target, although the
+intermediate scores show that the effect is not strictly monotonic.
 
 %-------------------------------------------------------------------------
 \subsection{Hyperparameters}
@@ -52,4 +118,5 @@
 
 \input{Table/3_hparams}
 
-\TODO{Fill in \cref{tab:hparams} with the settings you actually used (defaults are pre-filled from \texttt{main.py} / README) and justify any value you changed.}
+\Cref{tab:hparams} lists the settings used for the main comparison.
+The ablations vary only the parameter under study; all other settings remain fixed.

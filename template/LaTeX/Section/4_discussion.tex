@@ -7,7 +7,21 @@
 % [3 pts] Intuitively explain why L_Diff = ||eps_hat(x_t, y, t) - eps_t||^2 did not produce
 % realistic samples (use < 1 math equation) & provide visual results of applying L_Diff.
 
-\TODO{Explain how you produced the result in \cref{fig:diff_loss}. Then explain intuitively (at most one equation) why directly optimizing the diffusion loss does not give realistic images, and connect your explanation to what is visible in the figure.}
+For the three prompts in \cref{fig:diff_loss}, we directly minimized the noise-prediction MSE by
+backpropagating through the frozen U-Net, retaining its input Jacobian.
+
+Noise-prediction error measures how well the model recovers a known perturbation; it does not
+directly measure whether the clean latent represents a realistic image.
+When the latent is optimized, the U-Net Jacobian transforms the noise residual into an update.
+This transformation can amplify sensitivity to local patterns rather than produce a coherent change
+toward the requested object.
+SDS omits that term and uses the noise residual directly as guidance.
+
+In \cref{fig:diff_loss}, the diffusion-loss results contain dense, colorful noise without a
+recognizable dog, castle, or car, whereas SDS produces recognizable, though blurred, subjects.
+The average CLIP score over these three prompts is 0.1831 for diffusion loss versus 0.2931 for SDS.
+The images are consistent with optimizing denoising error without obtaining coherent object
+structure.
 
 %-------------------------------------------------------------------------
 \subsection{Why SDI and VSD Outperform SDS}
@@ -15,10 +29,29 @@
 % [3 pts] Intuitively analyze why SDI and VSD perform better than SDS (without heavy math).
 
 \noindent\textbf{SDS.}
-\TODO{What are the typical artifacts of SDS in your results, and what in the SDS update causes them?}
+In \cref{fig:qualitative}, SDS produces recognizable but heavily smoothed subjects, such as the
+burger and cabin, with little surface texture or fine structural detail.
+SDS samples fresh Gaussian noise and a timestep at each iteration, so successive updates can favor
+different image changes.
+These fluctuating directions can wash out fine details during optimization.
+Strong CFG reinforces the prompt, but does not ensure that these details are preserved.
 
 \noindent\textbf{VSD.}
-\TODO{What does VSD change compared with SDS, and why does that lead to better results? Explain intuitively, without heavy math, and support it with your own figures or numbers.}
+VSD still adds Gaussian noise, but replaces that sampled noise in the distillation residual with
+the prediction of a LoRA model trained to denoise the current generated latent.
+The update therefore compares the pretrained image prior with a predictor adapted to the current
+samples, allowing it to account for their distribution rather than use a single sampled noise
+as the reference.
+In \cref{fig:qualitative}, VSD recovers sharper burger ingredients and more vegetation around the
+villa than SDS.
+The villa's CLIP score also improves from 0.2935 to 0.3097 (\cref{tab:clip}).
 
 \noindent\textbf{SDI.}
-\TODO{What does SDI change compared with SDS, and why does that lead to better results? Explain intuitively, without heavy math, and support it with your own figures or numbers.}
+SDI constructs the noisy latent by DDIM inversion of the current image instead of injecting fresh
+Gaussian noise.
+This makes the perturbation depend on the image and prompt, supporting more coherent updates.
+Its decreasing timestep schedule moves from high to low noise, while the cached target provides
+a fixed reconstruction objective between refreshes.
+In \cref{fig:qualitative}, SDI produces clearer cabin and church structures and cleaner surfaces
+than SDS.
+Its average CLIP score increases from 0.3042 to 0.3086.

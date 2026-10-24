@@ -2,8 +2,10 @@
 \label{sec:intro}
 % [2 pts] Briefly describe and summarize the goal of this assignment.
 
-\TODO{What problem does score distillation address, and how is it different from ordinary diffusion sampling? Keep it to a few sentences; you may refer to \cref{fig:teaser}.}
+Diffusion models generate images by progressively denoising random noise. In contrast, score distillation uses a pretrained diffusion model to provide gradients that guide the optimization of a separate representation, rather than directly sampling from the diffusion model. This enables diffusion models to guide the generation of content represented by other parameterizations.
 
-\TODO{State the goal of this assignment: which methods you implemented, what you generated, and how you evaluated the results.}
+As illustrated in \cref{fig:teaser}, score distillation uses a pretrained diffusion model to guide the optimization of a parameterized representation. The representation is converted into an image, and the diffusion model provides guidance based on a text prompt to iteratively update its parameters. 
 
-\TODO{(Optional) Briefly outline the rest of the report.}
+Score distillation has been widely used in 3D generation tasks. In this lab, however, we apply score distillation to 2D image generation rather than 3D object generation. Specifically, we implement and compare three variants: Score Distillation Sampling (SDS), Variational Score Distillation (VSD), and Score Distillation via Inversion (SDI). 
+
+We evaluate the generated images quantitatively using CLIP scores and qualitatively through visual comparisons. Additionally, we conduct ablation studies on the guidance scale in SDS, as well as the number of inversion steps and target update interval in SDI, to investigate how these hyperparameters affect generation quality.

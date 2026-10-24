@@ -1,0 +1,35 @@
+\begin{thebibliography}{4}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Lukoianov et~al.(2024)Lukoianov, S{\'a}ez~de Oc{\'a}riz~Borde,
+  Greenewald, Guizilini, Bagautdinov, Sitzmann, and Solomon]{lukoianov2024sdi}
+Artem Lukoianov, Haitz S{\'a}ez~de Oc{\'a}riz~Borde, Kristjan Greenewald,
+  Vitor~Campagnolo Guizilini, Timur Bagautdinov, Vincent Sitzmann, and Justin
+  Solomon.
+\newblock Score distillation via reparametrized {DDIM}.
+\newblock In \emph{Adv. Neural Inform. Process. Syst.}, 2024.
+
+\bibitem[Poole et~al.(2023)Poole, Jain, Barron, and
+  Mildenhall]{poole2023dreamfusion}
+Ben Poole, Ajay Jain, Jonathan~T. Barron, and Ben Mildenhall.
+\newblock Dreamfusion: Text-to-3d using 2d diffusion.
+\newblock In \emph{Int. Conf. Learn. Represent.}, 2023.
+
+\bibitem[Song et~al.(2021)Song, Meng, and Ermon]{song2021ddim}
+Jiaming Song, Chenlin Meng, and Stefano Ermon.
+\newblock Denoising diffusion implicit models.
+\newblock In \emph{Int. Conf. Learn. Represent.}, 2021.
+
+\bibitem[Wang et~al.(2023)Wang, Lu, Wang, Bao, Li, Su, and
+  Zhu]{wang2023prolificdreamer}
+Zhengyi Wang, Cheng Lu, Yikai Wang, Fan Bao, Chongxuan Li, Hang Su, and Jun
+  Zhu.
+\newblock Prolificdreamer: High-fidelity and diverse text-to-3d generation with
+  variational score distillation.
+\newblock In \emph{Adv. Neural Inform. Process. Syst.}, 2023.
+
+\end{thebibliography}

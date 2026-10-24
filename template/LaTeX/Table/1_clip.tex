@@ -1,6 +1,7 @@
 \begin{table}[t]
   \centering
   \footnotesize
+  \setlength{\tabcolsep}{4pt}
   \caption{\textbf{CLIP score} ($\uparrow$, ViT-B/32) per prompt.}
   \label{tab:clip}
   % values: outputs/{sds,vsd,sdi}/eval.json
@@ -8,18 +9,18 @@
     \toprule
     Prompt & SDS & VSD & SDI \\
     \midrule
-    A red bus driving on a desert road & 0.0000 & 0.0000 & 0.0000 \\
-    a boat in a river                  & 0.0000 & 0.0000 & 0.0000 \\
-    A cabin surrounded by forests      & 0.0000 & 0.0000 & 0.0000 \\
-    A church beside a lake             & 0.0000 & 0.0000 & 0.0000 \\
-    A villa close to the pool          & 0.0000 & 0.0000 & 0.0000 \\
-    A castle next to a river           & 0.0000 & 0.0000 & 0.0000 \\
-    A burger on the table              & 0.0000 & 0.0000 & 0.0000 \\
-    A dog sitting on grass             & 0.0000 & 0.0000 & 0.0000 \\
-    a cat sitting on a table           & 0.0000 & 0.0000 & 0.0000 \\
-    A car on the road                  & 0.0000 & 0.0000 & 0.0000 \\
+    A red bus driving on a desert road & 0.3442 & 0.3528 & \textbf{0.3846} \\
+    a boat in a river & 0.2953 & \textbf{0.3034} & 0.2992 \\
+    A cabin surrounded by forests & 0.3010 & 0.3228 & \textbf{0.3247} \\
+    A church beside a lake & 0.3246 & 0.3224 & \textbf{0.3362} \\
+    A villa close to the pool & 0.2935 & \textbf{0.3097} & 0.3006 \\
+    A castle next to a river & 0.2959 & \textbf{0.3009} & 0.3008 \\
+    A burger on the table & \textbf{0.3047} & 0.2874 & 0.2990 \\
+    A dog sitting on grass & \textbf{0.2880} & 0.2688 & 0.2627 \\
+    a cat sitting on a table & 0.2989 & 0.2725 & \textbf{0.3021} \\
+    A car on the road & \textbf{0.2953} & 0.2699 & 0.2757 \\
     \midrule
-    \textbf{Average}                   & 0.0000 & 0.0000 & 0.0000 \\
+    \textbf{Average} & 0.3042 & 0.3011 & \textbf{0.3086} \\
     \bottomrule
   \end{tabular}
 \end{table}

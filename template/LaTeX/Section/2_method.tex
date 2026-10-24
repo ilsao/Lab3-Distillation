@@ -1,26 +1,87 @@
 \section{Methodology}
 \label{sec:method}
-% [6 pts] Explain SDS, VSD, and SDI; both the concept and your implementation.
 
-\TODO{Introduce the background and notation shared by the three methods (\eg the pretrained diffusion model~\cite{rombach2022ldm}, the forward noising process~\cite{ho2020ddpm}, classifier-free guidance~\cite{ho2022cfg}), so the following subsections can refer to them.}
+Given a text prompt $y$, we generate an image by optimizing a latent
+$\mathbf{x}_0\in\mathbb{R}^{1\times4\times64\times64}$ initialized from
+$\mathcal{N}(\mathbf{0},\mathbf{I})$.
+Stable Diffusion 2.1-base provides the pretrained noise predictor
+$\hat{\boldsymbol{\epsilon}}_\theta(\mathbf{x}_t,y,t)$.
+Its base parameters remain fixed, and the final latent is decoded into an RGB image using the
+pretrained VAE.
+
+Let $t$ denote a diffusion timestep and $\bar\alpha_t$ the cumulative product of the noise-schedule
+coefficients.
+Gaussian forward noising produces
+\begin{equation}
+ \mathbf{x}_t=\sqrt{\bar\alpha_t}\,\mathbf{x}_0
+   +\sqrt{1-\bar\alpha_t}\,\boldsymbol{\epsilon}_t,
+ \qquad \boldsymbol{\epsilon}_t\sim\mathcal{N}(\mathbf{0},\mathbf{I}).
+ \label{eq:forward}
+\end{equation}
+We obtain the coefficients from the model's DDIM scheduler, with timestep bounds $t_{\min}=20$ and
+$t_{\max}=980$ out of 1000 training timesteps.
+The sampled noise $\boldsymbol{\epsilon}_t$ is distinguished from the predicted noise
+$\hat{\boldsymbol{\epsilon}}_\theta$.
+
+The implementation applies classifier-free guidance (CFG) by combining predictions conditioned on
+the positive prompt $y$ and negative prompt $y_-$, with guidance weight $\omega$:
+\begin{equation}
+\begin{aligned}
+ \hat{\boldsymbol{\epsilon}}_{\mathrm{CFG}}(\mathbf{x}_t,y,t)
+ ={}&\hat{\boldsymbol{\epsilon}}_\theta(\mathbf{x}_t,y_-,t)\\
+ &+\omega\bigl[\hat{\boldsymbol{\epsilon}}_\theta(\mathbf{x}_t,y,t)
+ -\hat{\boldsymbol{\epsilon}}_\theta(\mathbf{x}_t,y_-,t)\bigr].
+\end{aligned}
+ \label{eq:cfg}
+\end{equation}
+Both text embeddings are computed without gradients, and the two predictions are evaluated in a
+single batched U-Net call.
+Below, $\hat{\boldsymbol{\epsilon}}_\theta$ denotes the prediction after CFG with the guidance
+setting specified for each method.
 
 %-------------------------------------------------------------------------
 \subsection{Score Distillation Sampling (SDS)}
 \label{sec:sds}
 
 \noindent\textbf{Concept.}
-\TODO{In your own words: what is being optimized in SDS~\cite{poole2023dreamfusion}, where does the gradient come from, and why is it a reasonable objective? Point out the approximation that makes SDS practical.}
+SDS~\cite{poole2023dreamfusion} uses the difference between predicted and sampled noise to update a
+parameterized representation.
+Let $\boldsymbol{\theta}$ denote the optimized representation parameters, $c$ a camera viewpoint,
+and $\mathbf{x}_0=g(\boldsymbol{\theta};c)$ the rendered image.
+Omitting the noise predictor Jacobian gives
+\begin{equation}
+ \nabla_{\boldsymbol{\theta}}\mathcal{L}_{\mathrm{SDS}}(\boldsymbol{\theta})
+ =\bigl(\hat{\boldsymbol{\epsilon}}_\theta(\mathbf{x}_t,y,t)
+        -\boldsymbol{\epsilon}_t\bigr)
+   \frac{\partial\mathbf{x}_t}{\partial\boldsymbol{\theta}}.
+ \label{eq:sds_gradient}
+\end{equation}
+The subscript $\theta$ on the noise predictor identifies the pretrained network, while
+$\boldsymbol{\theta}$ in the gradient denotes the parameters being optimized.
 
 \noindent\textbf{Implementation.}
-\TODO{Paste your \texttt{get\_sds\_loss()} into the code block below, then walk through it: the main steps, the design choices you made and why, and anything that was tricky to get right.}
+At each iteration, we sample an integer $t$ uniformly from $[20,980)$, draw Gaussian noise, and
+construct $\mathbf{x}_t$ using \cref{eq:forward}.
+Our implementation additionally weights the noise residual by $w(t)=1-\bar\alpha_t$ and applies the
+weighted residual directly as the latent gradient.
+The noise prediction runs under \texttt{torch.no\_grad()}.
+We call \texttt{detach()} on the weighted residual and return its elementwise product with the
+latent, summed to a scalar.
+Backpropagation through this scalar supplies the chosen gradient without differentiating through the
+U-Net.
 
 \begin{lstlisting}
-def get_sds_loss(
-    self, latents, text_embeddings,
-    guidance_scale=7.5,
-):
-    # Paste your implementation here
-    ...
+def get_sds_loss(self, latents, text_embeddings, guidance_scale=7.5):
+    t = torch.randint(self.min_step, self.max_step, (latents.shape[0],), device=latents.device)
+    noise = torch.randn_like(latents)
+    alpha_bar_t = self.alphas[t].view(-1, 1, 1, 1)
+    xt = torch.sqrt(alpha_bar_t) * latents + torch.sqrt(1 - alpha_bar_t) * noise
+    with torch.no_grad():
+        noise_pred = self.get_noise_preds(xt, t, text_embeddings, guidance_scale)
+    w = 1 - alpha_bar_t
+    grad = (w * (noise_pred - noise)).detach()
+    loss = (grad * latents).sum()
+    return loss
 \end{lstlisting}
 
 %-------------------------------------------------------------------------
@@ -28,18 +89,51 @@ def get_sds_loss(
 \label{sec:vsd}
 
 \noindent\textbf{Concept.}
-\TODO{Which weakness of SDS does VSD~\cite{wang2023prolificdreamer} try to fix? What extra component does it introduce (\cf LoRA~\cite{hu2022lora}), and what is that component trained to do?}
+VSD~\cite{wang2023prolificdreamer} learns a noise predictor for the current generated samples to
+address over-smoothing and over-saturation.
+The sampled-noise term in SDS is replaced by the LoRA-adapted prediction:
+\begin{equation}
+\begin{aligned}
+ \nabla_{\boldsymbol{\theta}}\mathcal{L}_{\mathrm{VSD}}(\boldsymbol{\theta})
+ ={}&\bigl(\hat{\boldsymbol{\epsilon}}_\theta(\mathbf{x}_t,y,t)\\
+     &-\hat{\boldsymbol{\epsilon}}_{\mathrm{LoRA}}(\mathbf{x}_t,y,t)\bigr)
+       \frac{\partial\mathbf{x}_t}{\partial\boldsymbol{\theta}}.
+\end{aligned}
+ \label{eq:vsd_gradient}
+\end{equation}
+We optimize one latent per prompt.
+LoRA is trained with a denoising mean squared error between its predicted noise and the Gaussian
+noise used to construct $\mathbf{x}_t$.
 
 \noindent\textbf{Implementation.}
-\TODO{Paste your \texttt{get\_vsd\_loss()} into the code block below, then walk through it: how the extra component is set up and updated, how its loss and the distillation loss interact, and which parts receive gradients.}
+We disable the adapters for the frozen teacher prediction, then enable them for the trainable
+prediction on the same noisy latent and timestep.
+The adapted predictor uses $\omega=1$ so that CFG reduces to the positive-condition prediction,
+allowing LoRA to learn the conditional denoising prediction without guidance amplification.
+
+As in SDS, the latent update uses the noise residual weighted by $1-\bar\alpha_t$.
+The residual is detached before forming the scalar used for latent optimization.
+The adapter's denoising loss is added with \texttt{lora\_loss\_weight=1.0}, and its input latent is
+detached.
+These operations ensure that the distillation term updates the latent and the denoising term updates
+only LoRA.
 
 \begin{lstlisting}
-def get_vsd_loss(
-    self, latents, text_embeddings,
-    guidance_scale=7.5, lora_loss_weight=1.0,
-):
-    # Paste your implementation here
-    ...
+def get_vsd_loss(self, latents, text_embeddings, guidance_scale=7.5, lora_loss_weight=1.0):
+    noise = torch.randn_like(latents)
+    t = torch.randint(self.min_step, self.max_step, (latents.shape[0],), device=latents.device)
+    alpha_bar_t = self.alphas[t].view(-1, 1, 1, 1)
+    xt = torch.sqrt(alpha_bar_t) * latents + torch.sqrt(1 - alpha_bar_t) * noise
+    with torch.no_grad():
+        self.unet.disable_adapters()
+        noise_pred = self.get_noise_preds(xt, t, text_embeddings, guidance_scale)
+        self.unet.enable_adapters()
+    noise_lora = self.get_noise_preds(xt.detach(), t, text_embeddings, 1.0)
+    loss_lora = F.mse_loss(noise_lora, noise)
+    w = 1 - alpha_bar_t
+    grad = (w * (noise_pred - noise_lora)).detach()
+    loss = (grad * latents).sum() + loss_lora * lora_loss_weight
+    return loss
 \end{lstlisting}
 
 %-------------------------------------------------------------------------
@@ -47,30 +141,102 @@ def get_vsd_loss(
 \label{sec:sdi}
 
 \noindent\textbf{Concept.}
-\TODO{Which weakness of SDS does SDI~\cite{lukoianov2024sdi} try to fix? How does it obtain the noisy sample differently (\cf DDIM~\cite{song2021ddim}), and how does its timestep schedule differ from SDS?}
+SDI~\cite{lukoianov2024sdi} obtains a noisy sample by DDIM inversion~\cite{song2021ddim} instead of
+injecting independently sampled Gaussian noise.
+The current latent is updated by minimizing the mean squared error to a denoised target:
+\begin{equation}
+ \mathcal{L}_{\mathrm{SDI}}
+ =\operatorname{mean}\!\left[(\mathbf{x}_0-\mathbf{x}_{0|t})^2\right].
+ \label{eq:sdi_reconstruction_loss}
+\end{equation}
+Here, $\mathbf{x}_{0|t}$ is the cached clean estimate reconstructed directly from the inverted
+$\mathbf{x}_t$ at the same timestep $t$.
+The square is elementwise, and the mean averages over all latent elements.
+The timestep follows a rounded linear schedule from 980 to 20 over the optimization iterations
+rather than being sampled independently.
 
-\noindent\textbf{Implementation.}
-\TODO{Paste your \texttt{invert\_noise()} (DDIM inversion) and \texttt{get\_sdi\_loss()} into the two code blocks below, then walk through them: how your inversion loop works, how the timestep changes over the iterations, and how and when the target is updated.}
+\noindent\textbf{DDIM inversion.}
+We implement the inversion loop explicitly without calling a library inversion utility.
+The loop starts from the current clean latent and traverses rounded, evenly spaced timesteps from
+zero to the target timestep.
+At each step, it predicts noise, estimates the clean latent, and combines that estimate with the
+predicted noise using the coefficients of the next scheduled timestep.
+The initial coefficient is set to 1 because the input is clean.
+Inversion is deterministic: the accepted \texttt{eta} argument is unused, as permitted by the
+assignment.
 
 \begin{lstlisting}
 @torch.no_grad()
-def invert_noise(
-    self, latents, target_t, text_embeddings,
-    guidance_scale=-7.5, n_steps=10, eta=0.3,
-):
-    # Paste your DDIM inversion here
-    ...
+def invert_noise(self, latents, target_t, text_embeddings, guidance_scale=-7.5, n_steps=10, eta=0.3):
+    if n_steps < 1:
+        raise ValueError("n_steps must be at least 1")
+    target_t = torch.as_tensor(target_t, device=latents.device).expand(latents.shape[0])
+    stepsize = target_t / n_steps
+    timesteps = (
+        torch.arange(n_steps + 1, device=latents.device)[:, None] * stepsize
+    ).round().long()
+    alphas = self.alphas[timesteps].to(latents.dtype).view(
+        n_steps + 1, latents.shape[0], 1, 1, 1
+    )
+    alphas[0] = 1
+    sqrt_alphas = alphas.sqrt()
+    sqrt_one_minus_alphas = (1 - alphas).sqrt()
+    for i in range(n_steps):
+        noise_pred = self.get_noise_preds(
+            latents, timesteps[i], text_embeddings, guidance_scale
+        )
+        pred_x0 = (
+            latents - sqrt_one_minus_alphas[i] * noise_pred
+        ) / sqrt_alphas[i]
+        latents = (
+            sqrt_alphas[i + 1] * pred_x0
+            + sqrt_one_minus_alphas[i + 1] * noise_pred
+        )
+    return latents
 \end{lstlisting}
+
+\noindent\textbf{SDI Implementation.}
+The implemented target is the clean estimate reconstructed directly from the inverted noisy latent:
+\begin{equation}
+ \mathbf{x}_{0|t}
+ =\frac{\mathbf{x}_t-\sqrt{1-\bar\alpha_t}\,
+         \hat{\boldsymbol{\epsilon}}_\theta(\mathbf{x}_t,y,t)}
+        {\sqrt{\bar\alpha_t}}.
+ \label{eq:sdi_target}
+\end{equation}
 
 \begin{lstlisting}
 def get_sdi_loss(
-    self, latents, text_embeddings,
+    self,
+    latents,
+    text_embeddings,
     guidance_scale=7.5,
-    current_iter=0, total_iters=500,
+    current_iter=0,
+    total_iters=500,
     inversion_guidance_scale=-7.5,
-    inversion_n_steps=10, inversion_eta=0.3,
+    inversion_n_steps=10,
+    inversion_eta=0.3,
     update_interval=25,
 ):
-    # Paste your implementation here
-    ...
+    B = latents.shape[0]
+    progress = min(max(current_iter / max(total_iters - 1, 1), 0.0), 1.0)
+    timestep = round(self.max_step + (self.min_step - self.max_step) * progress)
+    t = torch.full((B,), timestep, device=latents.device, dtype=torch.long)
+    should_update = (current_iter % update_interval == 0) or not hasattr(self, 'sdi_target')
+    if should_update:
+        with torch.no_grad():
+            latents_noisy = self.invert_noise(
+                latents, t, text_embeddings,
+                guidance_scale=inversion_guidance_scale,
+                n_steps=inversion_n_steps,
+                eta=inversion_eta
+            )
+            noise_pred = self.get_noise_preds(latents_noisy, t, text_embeddings, guidance_scale)
+            alpha_bar_t = self.alphas[t].to(latents.dtype).view(-1, 1, 1, 1)
+            target = (
+                latents_noisy - torch.sqrt(1 - alpha_bar_t) * noise_pred
+            ) / torch.sqrt(alpha_bar_t)
+            self.sdi_target = target.detach()
+    loss = F.mse_loss(self.sdi_target, latents)
+    return loss
 \end{lstlisting}

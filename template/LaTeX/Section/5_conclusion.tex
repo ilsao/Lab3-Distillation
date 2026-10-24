@@ -2,4 +2,18 @@
 \label{sec:conclusion}
 % [2 pts] Wrap up all the context in your report and give a short summary.
 
-\TODO{Summarize what you implemented, the main quantitative and qualitative findings, the key lessons from the ablations, and your answer to why VSD and SDI outperform SDS.}
+We implemented SDS, VSD, and SDI for latent image optimization using Stable Diffusion 2.1-base.
+SDI achieved the highest average CLIP score of 0.3086, followed by SDS at 0.3042 and VSD at 0.3011.
+SDS produced recognizable but smoothed subjects, VSD recovered more detail with irregular textures,
+and SDI generally produced clearer structures and cleaner surfaces.
+VSD uses a learned noise predictor adapted to the current samples, while SDI obtains image-dependent
+perturbations through inversion, providing alternatives to the sampled-noise reference in SDS.
+These changes can improve visual detail, although VSD did not exceed SDS's average CLIP score.
+
+The ablations showed that stronger SDS guidance helps only up to a point, additional inversion steps
+do not guarantee higher scores, and repeatedly refreshing the SDI target is preferable to fitting
+only its initial estimate.
+Directly optimizing noise-prediction MSE through the U-Net produced noisy, unrecognizable images,
+further illustrating the importance of the chosen update direction.
+Overall, the results highlight the influence of noise construction and target updates on generation
+quality, and the need to assess both text alignment and visual appearance.

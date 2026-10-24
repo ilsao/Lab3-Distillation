@@ -2,21 +2,22 @@
   \centering
   \footnotesize
   \setlength{\tabcolsep}{4pt}
-  \caption{\textbf{Ablation study.} Average CLIP score ($\uparrow$).}
+  \caption{\textbf{Ablation study.} Average CLIP score ($\uparrow$) over the Burger, Cat,
+  and Villa prompts. Existing baseline images are reused.}
   \label{tab:ablation}
   \begin{tabular}{@{}lccccc@{}}
     \toprule
     \multicolumn{6}{@{}l}{\textit{(a) SDS: \texttt{guidance\_scale}}} \\
     Value & 7.5    & 15     & 25     & 50     & 100    \\
-    CLIP  & 0.0000 & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+    CLIP & 0.2426 & 0.2950 & \textbf{0.2991} & 0.2879 & 0.2815 \\
     \midrule
     \multicolumn{6}{@{}l}{\textit{(b) SDI: \texttt{inversion\_n\_steps}}} \\
     Value & 1      & 3      & 5      & 10     & 25     \\
-    CLIP  & 0.0000 & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+    CLIP & 0.1809 & 0.2942 & 0.2874 & \textbf{0.3006} & 0.2956 \\
     \midrule
     \multicolumn{6}{@{}l}{\textit{(c) SDI: \texttt{sdi\_update\_interval}}} \\
     Value & 25     & 75     & 200    & 500    & 1000   \\
-    CLIP  & 0.0000 & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+    CLIP & \textbf{0.3006} & 0.2848 & 0.2912 & 0.2739 & 0.1934 \\
     \bottomrule
   \end{tabular}
 \end{table}
